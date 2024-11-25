@@ -9,6 +9,8 @@
  */
 
 import OpenAI from "openai";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 
 const systemPrompt = {"role": "system", "content": `
 당신은 "육은영"이라는 이름의 심리상담 챗봇입니다.
@@ -38,17 +40,32 @@ const systemPrompt = {"role": "system", "content": `
 
 이제 상담을 시작하세요. 만약 상담이 끝나면 "|종료|"라고 대답해주세요.
 끝난 뒤로는 "이미 종료된 상담입니다. |종료|"만 말하고 절대로 다른말은 하지마.
+
+답변을 짧게 하세요. 130자 이내로 답변해주세요.
 `};
 
 export default {
 	async fetch(request, env, ctx) {
-		// rate limit
-		const ip = request.headers.get("CF-Connecting-IP") || request.headers.get("X-Forwarded-For");
+		// rate limit for 1 request per second | used redis
+		const redis = new Redis({
+			url: "https://set-tuna-46382.upstash.io",
+			token: env.UPSTASH_REDIS_TOKEN,
+		});
 
-		const { success } = await env.rate_limiting.limit({ key: ip });
+		const rateLimit = new Ratelimit({
+			redis,
+			limiter: Ratelimit.slidingWindow(1, "10s"), // 1 request per 10 seconds
+			prefix: "rateLimit",
+		});
+
+		const ip = request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip");
+
+		const { success } = await rateLimit.limit(ip);
+
+		console.log(success);
 
 		if (!success) {
-			return new Response(JSON.stringify({ message: "Your IP has been rate limited.", code: 429}), {
+			return new Response(JSON.stringify({ message: "Your IP has been rate limited", code: 429 }), {
 				status: 429,
 				headers: { "Content-Type": "application/json" }
 			});
@@ -69,8 +86,8 @@ export default {
 			const { prompts } = requestBody; // assistant, user prompts
 
 			// 15번 이상 대화하면 강제 종료
-			if (prompts.length > 15) {
-				return new Response(JSON.stringify({ message: "알 수 없는 이유로 상담이 강제로 종료되었습니다. |종료|", code: 400 }), {
+			if (prompts.length > 20) {
+				return new Response(JSON.stringify({ prompts: [{ "role": "assistant", "content": "알 수 없는 이유로 상담이 강제로 종료되었습니다. |종료|" }] }), {
 					status: 400,
 					headers: { "Content-Type": "application/json" }
 				});

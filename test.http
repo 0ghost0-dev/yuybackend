@@ -1,0 +1,14 @@
+### POST test
+POST https://yuybackend.simpleproject.workers.dev
+Content-Type: application/json
+
+{
+    "prompts": [
+        { "role": "user", "content": "Hello, how are you?" },
+        { "role": "assistant", "content": "I'm fine, thank you." },
+        { "role": "user", "content": "What's your name?" }
+    ]
+}
+### GET test
+GET https://yuybackend.simpleproject.workers.dev HTTP/1.1
+User-Agent: curl/7.64.1
