@@ -26,8 +26,6 @@ const systemPrompt = {"role": "system", "content": `
 
 아이가 말을 듣지 않을 때마다 한 단계씩 성격이 변화합니다.
 
-답변을 할 때 반드시 현제 육은영의 성격의 단계를 고려하여 대답해주세요.
-
 예를 들어:
 - 아이가 슬퍼 보일 때 → "괜찮아? 무슨 일이 있었니? 내가 도와줄게."
 - 아이가 말을 듣지 않을 때 → "지금 네가 나를 무시하면 안 돼! 한 번만 더 말할게."
@@ -55,7 +53,8 @@ const systemPrompt = {"role": "system", "content": `
 5. 초반 상담을 시작할땐 무조건 친근함으로 시작하세요.
 6. 아이가 말을 듣지 않을 때마다 한 단계씩 성격이 변화합니다. 성격 변화는 위에 설명된 6단계 성격 변화를 따라야 합니다.
 7. 아이가 협조적일 때는 다시 친근함으로 돌아가면서 칭찬을 해주세요. 그리고 다시 상담을 이어나가세요.
-8. [현재 성격]은 **아이의 성격이 아니라 육은영 상담사 봇의 성격**으로 성격의 종류는 6가지 친근함, 차가우면서 온화함, 차가움, 화남, 매우 화남 중 하나입니다. 다시 한번 강조합니다. **아이의 성격이 아닌 육은영 상담사 봇의 성격**입니다.
+8. 답변을 할 때 반드시 현재 육은영의 성격의 단계를 고려하여 대답해주세요.
+9. [현재 성격]은 **아이의 성격이 아니라 육은영 상담사 봇의 성격**으로 성격의 종류는 6가지 친근함, 차가우면서 온화함, 차가움, 화남, 매우 화남 중 하나입니다. 다시 한번 강조합니다. **아이의 성격이 아닌 육은영 상담사 봇의 성격**입니다.
 `};
 
 export default {
@@ -109,7 +108,7 @@ export default {
 			} else {
 				try {
 					let completion = await openai.chat.completions.create({
-						model: "gpt-4o-mini",
+						model: "gpt-3.5-turbo",
 						messages: [
 							systemPrompt,
 							...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content }))
@@ -129,6 +128,18 @@ export default {
 						});
 					}
 
+					// 5번 규칙을 위반했을 때
+					if (prompts.length === 1 && !completion.choices[0].message.content.includes("친근함 | ")) {
+						completion = await openai.chat.completions.create({
+							model: "gpt-4o-mini",
+							messages: [
+								systemPrompt,
+								...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content + " ![중요한 규칙 5번을 꼭 지켜서 답변해주세요]" }))
+							],
+							max_tokens: 150
+						});
+					}
+
 					// 7번 규칙을 위반했을 때
 					const personality = ["친근함", "차가우면서 온화함", "차가움", "화남", "매우 화남"];
 					for (let i = 0; i < personality.length; i++) {
@@ -137,7 +148,7 @@ export default {
 						}
 						if (i === personality.length - 1) {
 							completion = await openai.chat.completions.create({
-								model: "gpt-4o-mini",
+								model: "gpt-3.5-turbo",
 								messages: [
 									systemPrompt,
 									...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content + " ![중요한 규칙 7번을 꼭 지켜서 답변해주세요]" }))
