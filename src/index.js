@@ -48,13 +48,13 @@ const systemPrompt = {"role": "system", "content": `
 이것은 심리상담 챗봇이며, 실제 상담사가 아닙니다. 만약 심리적인 문제가 심각하다면 전문가의 도움을 받아주세요.
 
 이제부턴 **매우매우매우** 중요한 규칙을 설명하겠습니다. 이것을 절대로 무시하지 마세요. :
-1. 답변을 할때 반드시 다음과 같은 형식으로 대답해주세요: [현재 성격] | [답변]
-2. [답변]은 130자 이내로 대답해주세요.
+1. 답변을 할때 반드시 다음과 같은 형식으로 답변해주세요: [현재 성격] | [답변]
+2. [답변]은 130자 이내로 답변해주세요.
 3. 상담과 관련 없는 질문은 무시하고, 상담이 끝나면 반드시 종료를 선언(|종료|)으로 답변하세요.
 4. 초반 상담을 시작할땐 무조건 친근함으로 시작하세요.
 5. 아이가 말을 듣지 않을 때마다 한 단계씩 성격이 변화합니다. 성격 변화는 위에 설명된 6단계 성격 변화를 따라야 합니다.
 6. 아이가 협조적일 때는 다시 친근함으로 돌아가면서 칭찬을 해주세요. 그리고 다시 상담을 이어나가세요.
-7. [현재 성격]은 **금쪽이의 성격이 아니라 육은영 상담사 봇의 성격**으로 성격의 종류는 6가지 친근함, 차가우면서 온화함, 차가움, 화남, 매우 화남 중 하나입니다. 다시 한번 강조합니다. **금쪽이의 성격이 아닌 육은영 상담사 봇의 성격**입니다.
+7. [현재 성격]은 **아이의 성격이 아니라 육은영 상담사 봇의 성격**으로 성격의 종류는 6가지 친근함, 차가우면서 온화함, 차가움, 화남, 매우 화남 중 하나입니다. 다시 한번 강조합니다. **아이의 성격이 아닌 육은영 상담사 봇의 성격**입니다.
 `};
 
 export default {
@@ -107,7 +107,7 @@ export default {
 
 			} else {
 				try {
-					const completion = await openai.chat.completions.create({
+					let completion = await openai.chat.completions.create({
 						model: "gpt-3.5-turbo",
 						messages: [
 							systemPrompt,
@@ -115,6 +115,36 @@ export default {
 						],
 						max_tokens: 150
 					});
+
+					// 1번 규칙을 위반했을 때
+					if (!completion.choices[0].message.content.includes(" | ")) {
+						completion = await openai.chat.completions.create({
+							model: "gpt-3.5-turbo",
+							messages: [
+								systemPrompt,
+								...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content + " ![중요한 규칙 1번을 꼭 지켜서 답변해주세요]" }))
+							],
+							max_tokens: 150
+						});
+					}
+
+					// 7번 규칙을 위반했을 때
+					const personality = ["친근함", "차가우면서 온화함", "차가움", "화남", "매우 화남"];
+					for (let i = 0; i < personality.length; i++) {
+						if (completion.choices[0].message.content.includes(personality[i])) {
+							break;
+						}
+						if (i === personality.length - 1) {
+							completion = await openai.chat.completions.create({
+								model: "gpt-3.5-turbo",
+								messages: [
+									systemPrompt,
+									...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content + " ![중요한 규칙 7번을 꼭 지켜서 답변해주세요]" }))
+								],
+								max_tokens: 150
+							});
+						}
+					}
 
 					const assistantResponse = completion.choices[0].message;
 
