@@ -132,7 +132,7 @@ export default {
 					// 7번 규칙을 위반했을 때
 					const personality = ["친근함", "차가우면서 온화함", "차가움", "화남", "매우 화남"];
 					for (let i = 0; i < personality.length; i++) {
-						if (completion.choices[0].message.cㄹontent.includes(personality[i])) {
+						if (completion.choices[0].message.content.includes(personality[i])) {
 							break;
 						}
 						if (i === personality.length - 1) {
