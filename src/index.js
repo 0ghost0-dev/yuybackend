@@ -109,7 +109,7 @@ export default {
 			} else {
 				try {
 					let completion = await openai.chat.completions.create({
-						model: "gpt-3.5-turbo",
+						model: "gpt-4o-mini",
 						messages: [
 							systemPrompt,
 							...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content }))
@@ -120,7 +120,7 @@ export default {
 					// 1번 규칙을 위반했을 때
 					if (!completion.choices[0].message.content.includes(" | ")) {
 						completion = await openai.chat.completions.create({
-							model: "gpt-3.5-turbo",
+							model: "gpt-4o-mini",
 							messages: [
 								systemPrompt,
 								...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content + " ![중요한 규칙 1번을 꼭 지켜서 답변해주세요]" }))
@@ -137,7 +137,7 @@ export default {
 						}
 						if (i === personality.length - 1) {
 							completion = await openai.chat.completions.create({
-								model: "gpt-3.5-turbo",
+								model: "gpt-4o-mini",
 								messages: [
 									systemPrompt,
 									...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content + " ![중요한 규칙 7번을 꼭 지켜서 답변해주세요]" }))
