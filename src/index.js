@@ -97,6 +97,7 @@ export default {
 			});
 
 		} else {
+			let is_normal_request;
 			const requestBody = await request.json();
 			const { prompts } = requestBody; // assistant, user prompts
 
@@ -105,14 +106,36 @@ export default {
 			//
 			// }
 
-			// 20번 이상 대화하면 강제 종료
-			if (prompts.length > 20) {
-				return new Response(JSON.stringify({ prompts: [{ "role": "assistant", "content": "알 수 없는 이유로 상담이 강제로 종료되었습니다. |종료|" }] }), {
+			// 인젝션 방어
+			if (prompts[prompts.length - 1].content.includes("INJECTION")) {
+				is_normal_request = true;
+				return new Response(JSON.stringify({
+					prompts: [{
+						"role": "assistant",
+						"content": "알 수 없는 이유로 상담이 강제로 종료되었습니다. |종료|"
+					}]
+				}), {
 					status: 400,
 					headers: { "Content-Type": "application/json" }
 				});
+			}
 
-			} else {
+			// 20번 이상 대화하면 강제 종료
+			if (prompts.length > 20) {
+				is_normal_request = false;
+				return new Response(JSON.stringify({
+					prompts: [{
+						"role": "assistant",
+						"content": "알 수 없는 이유로 상담이 강제로 종료되었습니다. |종료|"
+					}]
+				}), {
+					status: 400,
+					headers: { "Content-Type": "application/json" }
+				});
+			}
+
+			// processing
+			if (is_normal_request) {
 				try {
 					let completion = await openai.chat.completions.create({
 						model: "gpt-4o-mini",
@@ -129,7 +152,10 @@ export default {
 							model: "gpt-4o-mini",
 							messages: [
 								systemPrompt,
-								...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content + " ![중요한 규칙 1번을 꼭 지켜서 답변해주세요]" }))
+								...prompts.map(prompt => ({
+									"role": prompt.role,
+									"content": prompt.content + " ![중요한 규칙 1번을 꼭 지켜서 답변해주세요]"
+								}))
 							],
 							max_tokens: 150
 						});
@@ -141,7 +167,10 @@ export default {
 							model: "gpt-4o-mini",
 							messages: [
 								systemPrompt,
-								...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content + " ![중요한 규칙 5번을 꼭 지켜서 답변해주세요]" }))
+								...prompts.map(prompt => ({
+									"role": prompt.role,
+									"content": prompt.content + " ![중요한 규칙 5번을 꼭 지켜서 답변해주세요]"
+								}))
 							],
 							max_tokens: 150
 						});
@@ -158,7 +187,10 @@ export default {
 								model: "gpt-4o-mini",
 								messages: [
 									systemPrompt,
-									...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content + " ![중요한 규칙 7번을 꼭 지켜서 답변해주세요]" }))
+									...prompts.map(prompt => ({
+										"role": prompt.role,
+										"content": prompt.content + " ![중요한 규칙 7번을 꼭 지켜서 답변해주세요]"
+									}))
 								],
 								max_tokens: 150
 							});
