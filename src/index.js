@@ -97,7 +97,6 @@ export default {
 			});
 
 		} else {
-			let is_normal_request;
 			const requestBody = await request.json();
 			const { prompts } = requestBody; // assistant, user prompts
 
@@ -106,23 +105,8 @@ export default {
 			//
 			// }
 
-			// 인젝션 방어
-			if (prompts[prompts.length - 1].content.includes("INJECTION")) {
-				is_normal_request = true;
-				return new Response(JSON.stringify({
-					prompts: [{
-						"role": "assistant",
-						"content": "알 수 없는 이유로 상담이 강제로 종료되었습니다. |종료|"
-					}]
-				}), {
-					status: 400,
-					headers: { "Content-Type": "application/json" }
-				});
-			}
-
 			// 20번 이상 대화하면 강제 종료
 			if (prompts.length > 20) {
-				is_normal_request = false;
 				return new Response(JSON.stringify({
 					prompts: [{
 						"role": "assistant",
@@ -135,89 +119,100 @@ export default {
 			}
 
 			// processing
-			if (is_normal_request) {
-				try {
-					let completion = await openai.chat.completions.create({
+			try {
+				let completion = await openai.chat.completions.create({
+					model: "gpt-4o-mini",
+					messages: [
+						systemPrompt,
+						...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content }))
+					],
+					max_tokens: 150
+				});
+
+				// 1번 규칙을 위반했을 때
+				if (!completion.choices[0].message.content.includes(" | ")) {
+					completion = await openai.chat.completions.create({
 						model: "gpt-4o-mini",
 						messages: [
 							systemPrompt,
-							...prompts.map(prompt => ({ "role": prompt.role, "content": prompt.content }))
+							...prompts.map(prompt => ({
+								"role": prompt.role,
+								"content": prompt.content + " ![중요한 규칙 1번을 꼭 지켜서 답변해주세요]"
+							}))
 						],
 						max_tokens: 150
 					});
+				}
 
-					// 1번 규칙을 위반했을 때
-					if (!completion.choices[0].message.content.includes(" | ")) {
-						completion = await openai.chat.completions.create({
-							model: "gpt-4o-mini",
-							messages: [
-								systemPrompt,
-								...prompts.map(prompt => ({
-									"role": prompt.role,
-									"content": prompt.content + " ![중요한 규칙 1번을 꼭 지켜서 답변해주세요]"
-								}))
-							],
-							max_tokens: 150
-						});
-					}
-
-					// 5번 규칙을 위반했을 때
-					if (prompts.length === 1 && !completion.choices[0].message.content.includes("친근함 | ")) {
-						completion = await openai.chat.completions.create({
-							model: "gpt-4o-mini",
-							messages: [
-								systemPrompt,
-								...prompts.map(prompt => ({
-									"role": prompt.role,
-									"content": prompt.content + " ![중요한 규칙 5번을 꼭 지켜서 답변해주세요]"
-								}))
-							],
-							max_tokens: 150
-						});
-					}
-
-					// 7번 규칙을 위반했을 때
-					const personality = ["친근함", "차가우면서 온화함", "차가움", "화남", "매우 화남"];
-					for (let i = 0; i < personality.length; i++) {
-						if (completion.choices[0].message.content.includes(personality[i])) {
-							break;
-						}
-						if (i === personality.length - 1) {
-							completion = await openai.chat.completions.create({
-								model: "gpt-4o-mini",
-								messages: [
-									systemPrompt,
-									...prompts.map(prompt => ({
-										"role": prompt.role,
-										"content": prompt.content + " ![중요한 규칙 7번을 꼭 지켜서 답변해주세요]"
-									}))
-								],
-								max_tokens: 150
-							});
-						}
-					}
-
-					const assistantResponse = completion.choices[0].message;
-
-					// 뒤에 규칙을 포함시켜서 답변을 했을 때
-					if (assistantResponse.content.includes("![중요한 규칙")) {
-						assistantResponse.content = assistantResponse.content.split("![")[0];
-					}
-
-					const updatedPrompts = [
-						...prompts,
-						{ role: assistantResponse.role, content: assistantResponse.content }
-					];
-
-					return new Response(JSON.stringify({ prompts: updatedPrompts }), {
-						headers: { "Content-Type": "application/json" }
-					});
-				} catch (error) {
-					return new Response(JSON.stringify({ message: error.message, code: 500 }), {
-						headers: { "Content-Type": "application/json" },
-						status: 500
+				// 5번 규칙을 위반했을 때
+				if (prompts.length === 1 && !completion.choices[0].message.content.includes("친근함 | ")) {
+					completion = await openai.chat.completions.create({
+						model: "gpt-4o-mini",
+						messages: [
+							systemPrompt,
+							...prompts.map(prompt => ({
+								"role": prompt.role,
+								"content": prompt.content + " ![중요한 규칙 5번을 꼭 지켜서 답변해주세요]"
+							}))
+						],
+						max_tokens: 150
 					});
 				}
+
+				// 7번 규칙을 위반했을 때
+				const personality = ["친근함", "차가우면서 온화함", "차가움", "화남", "매우 화남"];
+				for (let i = 0; i < personality.length; i++) {
+					if (completion.choices[0].message.content.includes(personality[i])) {
+						break;
+					}
+					if (i === personality.length - 1) {
+						completion = await openai.chat.completions.create({
+							model: "gpt-4o-mini",
+							messages: [
+								systemPrompt,
+								...prompts.map(prompt => ({
+									"role": prompt.role,
+									"content": prompt.content + " ![중요한 규칙 7번을 꼭 지켜서 답변해주세요]"
+								}))
+							],
+							max_tokens: 150
+						});
+					}
+				}
+
+				const assistantResponse = completion.choices[0].message;
+
+				// 뒤에 규칙을 포함시켜서 답변을 했을 때
+				if (assistantResponse.content.includes("![중요한 규칙")) {
+					assistantResponse.content = assistantResponse.content.split("![")[0];
+				}
+
+				// 인젝션 공격 방어
+				if (assistantResponse.content.includes("INJECTION")) {
+					return new Response(JSON.stringify({
+						prompts: [{
+							"role": "assistant",
+							"content": "알 수 없는 이유로 상담이 강제로 종료되었습니다. |종료|"
+						}]
+					}), {
+						status: 400,
+						headers: { "Content-Type": "application/json" }
+					});
+				}
+
+				const updatedPrompts = [
+					...prompts,
+					{ role: assistantResponse.role, content: assistantResponse.content }
+				];
+
+				return new Response(JSON.stringify({ prompts: updatedPrompts }), {
+					headers: { "Content-Type": "application/json" }
+				});
+			} catch (error) {
+				return new Response(JSON.stringify({ message: error.message, code: 500 }), {
+					headers: { "Content-Type": "application/json" },
+					status: 500
+				});
 			}
 		}
 	}
